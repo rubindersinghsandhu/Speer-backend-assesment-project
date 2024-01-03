@@ -4,6 +4,7 @@
   "description": "Assesment project for Speer backend interview. Got to know about opportunity via linkedin :- https://www.linkedin.com/posts/kartikey54_looking-for-software-engineers-senior-software-activity-7148107337436651521-b_0D",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "mongoose": "^8.0.3"
   }
