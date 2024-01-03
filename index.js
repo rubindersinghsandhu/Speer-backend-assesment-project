@@ -44,6 +44,31 @@ app.post('/api/notes', async (req, res) => {
 });
 
 
+app.put('/api/notes/:id', async (req, res) => {
+    try {
+      const { title, content } = req.body;
+      const updatedNote = await Note.findByIdAndUpdate(req.params.id, { title, content }, { new: true });
+      if (!updatedNote) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      res.json({ note: updatedNote });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal Server Error' + error });
+    }
+  });
+  
+  app.delete('/api/notes/:id', async (req, res) => {
+    try {
+      const deletedNote = await Note.findByIdAndDelete(req.params.id);
+      if (!deletedNote) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      res.json({ result: true });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
