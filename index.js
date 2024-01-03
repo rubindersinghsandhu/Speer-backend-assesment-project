@@ -82,6 +82,21 @@ app.delete('/api/notes/:id', async (req, res) => {
     }
 });
 
+
+// Search functionality
+
+noteSchema.index({title: 'text', content: 'text'})
+app.get('/api/search', async (req, res) => {
+    const { q } = req.query;
+    try {
+      const results = await Note.find({ $text: { $search: q } });
+      res.json({ results });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });

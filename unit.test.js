@@ -15,7 +15,7 @@ describe('Unit Tests', () => {
     // Create a test note before running the tests
     beforeAll(async () => {
         testNoteId = await getRandomNoteId();
-    },20000);
+    }, 20000);
 
     // Note creation test
     it('should create a new note', async () => {
@@ -46,13 +46,20 @@ describe('Unit Tests', () => {
         const updatedData = { title: 'Updated Test Note', content: 'This is the updated content.' };
         const response = await request(app).put(`/api/notes/${testNoteId}`).send(updatedData);
         expect(response.body).toHaveProperty('note');
-    }, 10000); 
+    }, 10000);
 
     // Deleting a note test
     it('should delete a note', async () => {
         const response = await request(app).delete(`/api/notes/${testNoteId}`);
         expect(response.body).toHaveProperty('result');
         expect(response.body.result).toBe(true);
+    });
+
+    // Search functionality test
+    it('should search for notes', async () => {
+        const response = await request(app).get('/api/search?q=test');
+        expect(response.status).toBe(200);
+        expect(response.body).toHaveProperty('results');
     });
 
     afterAll(() => {
