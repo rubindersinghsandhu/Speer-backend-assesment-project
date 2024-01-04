@@ -2,40 +2,46 @@ const request = require('supertest');
 const app = require('./index');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const casual = require('casual');
 
 describe('Unit Tests', () => {
 
     let testNoteId, authToken;
     const authenticatedUser = {
-        userId: 'testUserId',
+        id: '6595736681e6409e61ba00df',
+        username: 'testuser',
     };
 
-    const generateToken = (userId) => {
+    const generateRandomNote = () => {
+        return {
+          title: casual.title,
+          content: casual.sentences(2),
+        };
+      };
+
+    const generateToken = (user) => {
         const secretKey = process.env.JWT_SECRET_KEY;
-        return jwt.sign({ userId }, secretKey, { expiresIn: '1h' });
+        return jwt.sign({ user }, secretKey, { expiresIn: '1h' });
     };
 
     const getRandomNoteId = async () => {
         const response = await request(app).get('/api/notes').set('Authorization',  authToken);
-        console.log(response);
         const notes = response.body.notes;
         const randomNote = notes[Math.floor(Math.random() * notes.length)];
-        return randomNote._id;
+        return randomNote.id;
     };
 
     // Create a test note before running the tests
     beforeAll(async () => {
-        authToken = generateToken()
+        authToken = generateToken(authenticatedUser);
         testNoteId = await getRandomNoteId();
-
     }, 20000);
 
-    // Test user registration
+    //Test user registration
     it('should register a new user', async () => {
         const response = await request(app)
             .post('/api/auth/signup')
-            .send({ username: 'testuser', password: 'testpassword' });
-
+            .send({ username: casual.username, password: casual.password });
         expect(response.status).toBe(201);
         expect(response.body).toHaveProperty('user');
     });
@@ -47,14 +53,15 @@ describe('Unit Tests', () => {
             .send({ username: 'testuser', password: 'testpassword' });
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('token');
-    });
+    },10000);
 
     // Note creation test
     it('should create a new note', async () => {
+        console.log(authToken);
         const response = await request(app)
             .post('/api/notes')
             .set('Authorization',  authToken)
-            .send({ title: 'Test Note', content: 'This is a test note.' });
+            .send(generateRandomNote());
         expect(response.status).toBe(201);
         expect(response.body).toHaveProperty('note');
     }, 10000);
@@ -76,8 +83,7 @@ describe('Unit Tests', () => {
     // Updating a note test
     it('should update a note', async () => {
         //Updating the note.
-        const updatedData = { title: 'Updated Test Note', content: 'This is the updated content.' };
-        const response = await request(app).put(`/api/notes/${testNoteId}`).send(updatedData).set('Authorization',  authToken);
+        const response = await request(app).put(`/api/notes/${testNoteId}`).send(generateRandomNote()).set('Authorization',  authToken);
         expect(response.body).toHaveProperty('note');
     }, 10000);
 

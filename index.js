@@ -16,6 +16,17 @@ mongoose.connect(process.env.MONGO_URI, { useUnifiedTopology: true })
 const noteSchema = new mongoose.Schema({
     title: String,
     content: String,
+    owner: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
+    sharedWith: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        },
+    ],
 });
 
 
@@ -37,19 +48,17 @@ app.use(bodyParser.json());
 const authenticateUser = (req, res, next) => {
     const token = req.header('Authorization');
     if (!token) {
-      return res.status(401).json({ error: 'Unauthorized - Token not provided' });
+        return res.status(401).json({ error: 'Unauthorized - Token not provided' });
     }
-  
+
     try {
-      console.log(token)
-      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-      console.log("Decoded = " + decoded)
-      req.user = decoded.user;
-      next();
+        const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+        req.user = decoded.user;
+        next();
     } catch (error) {
-      res.status(401).json({ error: 'Unauthorized - Invalid token' + error });
+        res.status(401).json({ error: 'Unauthorized - Invalid token' + error });
     }
-  };
+};
 
 //Authentication API's
 
@@ -65,6 +74,15 @@ app.post('/api/auth/signup', async (req, res) => {
     }
 });
 
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await User.find();
+        res.status(201).json({ users });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 //Login API
 app.post('/api/auth/login', async (req, res) => {
     try {
@@ -74,38 +92,62 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         const token = jwt.sign({ user: { id: user._id, username: user.username } }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
-        res.json({ token });
+        res.json({ token});
     } catch (error) {
-        console.log(error);
         res.status(500).json({ error: 'Internal Server Error' + error });
     }
 });
 
 // Get all Notes
-app.get('/api/notes', authenticateUser , async (req, res) => {
+app.get('/api/notes', authenticateUser, async (req, res) => {
     try {
-        const notes = await Note.find();
+        const userId = req.user.id;
+
+        // Find notes owned by the user
+        const userNotes = await Note.find({ owner: userId });
+
+        // Find notes shared with the user
+        const sharedNotes = await Note.find({ sharedWith: userId });
+
+        // Combine the two sets of notes
+        let notes = [...userNotes, ...sharedNotes];
+        notes = notes.map((note) => {
+            return {
+                "title" : note.title,
+                "content" : note.content,
+                "id" : note.id,
+                "owner": note.owner
+            }
+        });
         res.json({ notes });
     } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error' + error });
     }
 });
 
 //Get Note by Id
-app.get('/api/notes/:id', authenticateUser , async (req, res) => {
+app.get('/api/notes/:id', authenticateUser, async (req, res) => {
     try {
+        const userId = req.user.id;
         const note = await Note.findById(req.params.id);
+
+        //Checking if note belongs to current user
+        if(!note.owner.equals(userId) && !note.sharedWith.includes(userId)) {
+            return res.status(401).json({ error: 'Access Restricted' });
+        }
+
         res.json({ note });
     } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error' + error });
     }
 });
 
 // Create a note
-app.post('/api/notes', authenticateUser , async (req, res) => {
+app.post('/api/notes', authenticateUser, async (req, res) => {
     try {
+        const userId = req.user.id;
         const { title, content } = req.body;
-        const newNote = new Note({ title, content });
+        const newNote = new Note({ title, content, owner: userId });
         const savedNote = await newNote.save();
         res.status(201).json({ note: savedNote });
     } catch (error) {
@@ -114,10 +156,11 @@ app.post('/api/notes', authenticateUser , async (req, res) => {
 });
 
 // Update a note
-app.put('/api/notes/:id', authenticateUser , async (req, res) => {
+app.put('/api/notes/:id', authenticateUser, async (req, res) => {
     try {
+        const userId = req.user.id;
         const { title, content } = req.body;
-        const updatedNote = await Note.findByIdAndUpdate(req.params.id, { title, content }, { new: true });
+        const updatedNote = await Note.findOneAndUpdate({_id: req.params.id, owner: userId}, { title, content }, { new: true });
         if (!updatedNote) {
             return res.status(404).json({ error: 'Note not found' });
         }
@@ -128,9 +171,10 @@ app.put('/api/notes/:id', authenticateUser , async (req, res) => {
 });
 
 // Delete a note 
-app.delete('/api/notes/:id', authenticateUser , async (req, res) => {
+app.delete('/api/notes/:id', authenticateUser, async (req, res) => {
     try {
-        const deletedNote = await Note.findByIdAndDelete(req.params.id);
+        const userId = req.user.id;
+        const deletedNote = await Note.findOneAndDelete({_id: req.params.id, owner: userId});
         if (!deletedNote) {
             return res.status(404).json({ error: 'Note not found' });
         }
@@ -140,10 +184,9 @@ app.delete('/api/notes/:id', authenticateUser , async (req, res) => {
     }
 });
 
-
 // Search functionality
 noteSchema.index({ title: 'text', content: 'text' })
-app.get('/api/search', authenticateUser , async (req, res) => {
+app.get('/api/search', authenticateUser, async (req, res) => {
     const { q } = req.query;
     try {
         const results = await Note.find({ $text: { $search: q } });
@@ -153,6 +196,41 @@ app.get('/api/search', authenticateUser , async (req, res) => {
     }
 });
 
+//Share functionality
+app.post('/api/notes/:id/share', authenticateUser, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const noteId = req.params.id;
+        const { recipientUserId } = req.body;
+
+        // Check if noteId and recipientUserId are provided
+        if (!noteId || !recipientUserId) {
+            return res.status(400).json({ error: 'Bad Request: Missing noteId or recipientUserId' });
+        }
+
+        // Logic to share the note
+
+        // Find the note by ID
+        const note = await Note.findOne({_id: noteId, owner: userId});
+
+        // Check if the note exists
+        if (!note) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        // Add the recipient to the sharedWith array
+        note.sharedWith.push(recipientUserId);
+
+        // Save the updated note
+        await note.save();
+
+        // Send success response
+        res.status(200).json({ message: 'Note shared successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
