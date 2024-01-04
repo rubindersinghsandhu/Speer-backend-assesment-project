@@ -4,6 +4,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -59,6 +60,14 @@ const authenticateUser = (req, res, next) => {
         res.status(401).json({ error: 'Unauthorized - Invalid token' + error });
     }
 };
+
+// Rate limiting middleware
+const limiter = rateLimit({
+    windowMs: 1 * 1000, // 1 sec
+    max: 1, // max 1 requests per secs
+    message: 'Too many requests from this IP, please try again later.'
+  });
+  app.use('/api/', limiter);
 
 //Authentication API's
 
